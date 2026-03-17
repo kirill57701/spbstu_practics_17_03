@@ -1,8 +1,10 @@
 #include <iostream>
+#include <iomanip>
 #include "vec.hpp"
 
 bool testEmptVec(){
-  return 0;
+  topit::vec<int> v;
+  return v.is_empty();
 }
 
 int main() {
