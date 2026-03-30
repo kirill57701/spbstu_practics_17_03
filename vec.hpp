@@ -5,6 +5,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <utility>
+#include <new>
 
 namespace topit
 {
@@ -37,10 +38,10 @@ namespace topit
 
     void reserve(size_t required);
     void shrinkToFit();
-    
+
     iter insert(iter pos, const T& v);
     iter insert(iter pos, size_t c, const T& v);
-    template< class Fwditer >
+    template<class Fwditer>
     void insert(iter pos, Fwditer b, Fwditer e);
 
     iter erase(iter pos);
@@ -78,43 +79,76 @@ namespace topit
     }
   }
 
-  template< class T >
-  topit::vec<T>::vec(size_t size):
-  data_(alloc(size)),
-  size_(0),
-  cap_(size)
-{}
+  template<class T>
+  vec<T>::vec(size_t size):
+    data_(alloc(size)),
+    size_(0),
+    cap_(size)
+  {}
 
   template<class T>
-  vec<T>::vec() : data_(nullptr), size_(0), cap_(0) {}
+  vec<T>::vec():
+    data_(nullptr),
+    size_(0),
+    cap_(0)
+  {}
 
   template<class T>
-  vec<T>::~vec() { destroy(); }
+  vec<T>::~vec() {
+    destroy();
+  }
 
   template<class T>
-  vec<T>::vec(const vec<T>& rhs) : data_(alloc(rhs.size_)), size_(0), cap_(rhs.size_) {
+  vec<T>::vec(const vec<T>& rhs):
+    data_(alloc(rhs.size_)),
+    size_(0),
+    cap_(rhs.size_)
+  {
     try {
       for (size_t i = 0; i < rhs.size_; ++i) unsafePushBack(rhs.data_[i]);
-    } catch (...) { destroy(); throw; }
+    } catch (...) {
+      destroy();
+      throw;
+    }
   }
 
   template<class T>
-  vec<T>::vec(vec<T>&& rhs) noexcept : data_(rhs.data_), size_(rhs.size_), cap_(rhs.cap_) {
-    rhs.data_ = nullptr; rhs.size_ = 0; rhs.cap_ = 0;
+  vec<T>::vec(vec<T>&& rhs) noexcept:
+    data_(rhs.data_),
+    size_(rhs.size_),
+    cap_(rhs.cap_)
+  {
+    rhs.data_ = nullptr;
+    rhs.size_ = 0;
+    rhs.cap_ = 0;
   }
 
   template<class T>
-  vec<T>::vec(size_t size, const T& init) : data_(alloc(size)), size_(0), cap_(size) {
+  vec<T>::vec(size_t size, const T& init):
+    data_(alloc(size)),
+    size_(0),
+    cap_(size)
+  {
     try {
       for (size_t i = 0; i < size; ++i) unsafePushBack(init);
-    } catch (...) { destroy(); throw; }
+    } catch (...) {
+      destroy();
+      throw;
+    }
   }
 
   template<class T>
-  vec<T>::vec(std::initializer_list<T> il) : data_(alloc(il.size())), size_(0), cap_(il.size()) {
+  vec<T>::vec(std::initializer_list<T> il):
+    data_(alloc(il.size())),
+    size_(0),
+    cap_(il.size())
+  {
     try {
       for (const auto& x : il) unsafePushBack(x);
-    } catch (...) { destroy(); throw; }
+    } catch (...) {
+      destroy();
+      throw;
+    }
   }
 
   template<class T>
@@ -140,7 +174,6 @@ namespace topit
   typename vec<T>::iter vec<T>::insert(iter pos, const T& v) {
     size_t offset = pos - begin();
     if (size_ == cap_) reserve(cap_ == 0 ? 1 : cap_ * 2);
-    
     iter target = begin() + offset;
     if (target != end()) {
       new (data_ + size_) T(std::move(*(end() - 1)));
@@ -149,8 +182,28 @@ namespace topit
     } else {
       new (target) T(v);
     }
+    size_t res_off = target - begin();
     size_++;
+    return begin() + res_off;
+  }
+
+  template<class T>
+  typename vec<T>::iter vec<T>::insert(iter pos, size_t c, const T& v) {
+    size_t offset = pos - begin();
+    for (size_t i = 0; i < c; ++i) {
+      insert(begin() + offset, v);
+    }
     return begin() + offset;
+  }
+
+  template<class T>
+  template<class Fwditer>
+  void vec<T>::insert(iter pos, Fwditer b, Fwditer e) {
+    size_t offset = pos - begin();
+    for (; b != e; ++b) {
+      insert(begin() + offset, *b);
+      offset++;
+    }
   }
 
   template<class T>
@@ -160,6 +213,20 @@ namespace topit
     for (iter it = pos; it < end() - 1; ++it) *it = std::move(*(it + 1));
     (end() - 1)->~T();
     size_--;
+    return begin() + offset;
+  }
+
+  template<class T>
+  typename vec<T>::iter vec<T>::erase(iter first, iter last) {
+    if (first == last) return first;
+    size_t count = last - first;
+    size_t offset = first - begin();
+    for (iter it = first; it + count < end(); ++it) {
+      *it = std::move(*(it + count));
+    }
+    for (size_t i = 0; i < count; ++i) {
+      popBack();
+    }
     return begin() + offset;
   }
 
@@ -186,14 +253,23 @@ namespace topit
 
   template<class T>
   vec<T>& vec<T>::operator=(const vec<T>& rhs) {
-    if (this != std::addressof(rhs)) { vec<T> c(rhs); swap(c); }
+    if (this != std::addressof(rhs)) {
+      vec<T> c(rhs);
+      swap(c);
+    }
     return *this;
   }
 
   template<class T>
- vec<T>& vec<T>::operator=(vec<T>&& rhs) noexcept {
+  vec<T>& vec<T>::operator=(vec<T>&& rhs) noexcept {
     if (this != std::addressof(rhs)) {
-      swap(rhs);
+      destroy();
+      data_ = rhs.data_;
+      size_ = rhs.size_;
+      cap_ = rhs.cap_;
+      rhs.data_ = nullptr;
+      rhs.size_ = 0;
+      rhs.cap_ = 0;
     }
     return *this;
   }
@@ -211,19 +287,29 @@ namespace topit
   }
 
   template<class T>
-  T& vec<T>::operator[](size_t id) noexcept { return data_[id]; }
+  T& vec<T>::operator[](size_t id) noexcept {
+    return data_[id];
+  }
 
   template<class T>
-  const T& vec<T>::operator[](size_t id) const noexcept { return data_[id]; }
+  const T& vec<T>::operator[](size_t id) const noexcept {
+    return data_[id];
+  }
 
   template<class T>
-  size_t vec<T>::getSize() const noexcept { return size_; }
+  size_t vec<T>::getSize() const noexcept {
+    return size_;
+  }
 
   template<class T>
-  size_t vec<T>::getCapacity() const noexcept { return cap_; }
+  size_t vec<T>::getCapacity() const noexcept {
+    return cap_;
+  }
 
   template<class T>
-  bool vec<T>::isEmpty() const noexcept { return !size_; }
+  bool vec<T>::isEmpty() const noexcept {
+    return !size_;
+  }
 
   template<class T>
   void vec<T>::pushBack(const T& v) {
@@ -232,13 +318,20 @@ namespace topit
   }
 
   template<class T>
-  void vec<T>::popBack() { if (size_) { (data_ + size_ - 1)->~T(); size_--; } }
+  void vec<T>::popBack() {
+    if (size_) {
+      (data_ + size_ - 1)->~T();
+      size_--;
+    }
+  }
 
   template<class T>
   bool operator==(const vec<T>& lhs, const vec<T>& rhs) {
-    if (lhs.getSize() != rhs.getSize()) return false;
-    for (size_t i = 0; i < lhs.getSize(); ++i) if (!(lhs[i] == rhs[i])) return false;
-    return true;
+    if (lhs.getSize() != rhs.getSize()) return 0;
+    for (size_t i = 0; i < lhs.getSize(); ++i) {
+      if (!(lhs[i] == rhs[i])) return 0;
+    }
+    return 1;
   }
 }
 

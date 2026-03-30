@@ -51,7 +51,7 @@ bool testElementOutOfBoundConstAccess() {
     return false;
   } catch (const std::out_of_range &) {
     return true;
-  } catch (...) {
+  } catch (...)
     return false;
   }
 }
@@ -79,16 +79,16 @@ bool testInitializerList() {
 }
 
 bool testInsertPos() {
-  topit::vec<int> v = {7, 77, 3};
-  auto it = v.begin() + 2;
-  v.insert(it, 3);
-  return v.getSize() == 5 && v[2] == 3 && v[3] == 4;
+  topit::vec<int> v({7, 77, 3});
+  auto it = v.begin() + 1;
+  v.insert(it, 5);
+  return v.getSize() == 4 && v[1] == 5 && v[2] == 77;
 }
 
 bool testInsertCount() {
-  topit::vec<int> v = {101, 111};
-  v.insert(v.begin() + 1, 37, 73);
-  return v.getSize() == 5 && v[1] == 100 && v[3] == 100 && v[4] == 5;
+  topit::vec<int> v({101, 111});
+  v.insert(v.begin() + 1, static_cast<size_t>(3), 73);
+  return v.getSize() == 5 && v[1] == 73 && v[4] == 111;
 }
 
 int main()
