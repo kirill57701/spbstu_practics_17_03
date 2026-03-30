@@ -78,18 +78,33 @@ bool testInitializerList() {
   return v.getSize() == 2 && (v[0] == 1) && (v[1] == 2);
 }
 
+bool testInsertPos() {
+  topit::vec<int> v = {7, 77, 3};
+  auto it = v.begin() + 2;
+  v.insert(it, 3);
+  return v.getSize() == 5 && v[2] == 3 && v[3] == 4;
+}
+
+bool testInsertCount() {
+  topit::vec<int> v = {101, 111};
+  v.insert(v.begin() + 1, 37, 73);
+  return v.getSize() == 5 && v[1] == 100 && v[3] == 100 && v[4] == 5;
+}
+
 int main()
 {
   using test_t = std::pair< const char*, bool(*)() >;
   test_t tests[] = {
-    { "Empty vector", testEmptyVector },
-    { "Inbound access", testElementInboundAccess },
-    { "Out of bound access", testElementOutOfBoundAccess },
-    { "Inbound const access", testElementInboundConstAccess },
-    { "Out of bound const accsess", testElementOutOfBoundConstAccess },
-    { "Copy empty vector", testCopyConstructorForEmpty },
-    { "Copy non-empty vector", testCopyConstructorForNonEmpty },
-    { "Non-empty vector for non-empty initializer list", testInitializerList }
+    {"Empty vector", testEmptyVector},
+    {"Inbound access", testElementInboundAccess},
+    {"Out of bound access", testElementOutOfBoundAccess},
+    {"Inbound const access", testElementInboundConstAccess},
+    {"Out of bound const accsess", testElementOutOfBoundConstAccess},
+    {"Copy empty vector", testCopyConstructorForEmpty},
+    {"Copy non-empty vector", testCopyConstructorForNonEmpty},
+    {"Non-empty vector for non-empty initializer list", testInitializerList},
+    {"Test of insert into pos", testInsertPos},
+    {"Test of insert count", testInsertCount},
   };
 
   const size_t count = sizeof(tests) / sizeof(test_t);

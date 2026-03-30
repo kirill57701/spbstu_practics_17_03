@@ -3,237 +3,243 @@
 
 #include <initializer_list>
 #include <cassert>
+#include <stdexcept>
+#include <utility>
 
 namespace topit
 {
-  template< class T >
+  template<class T>
   struct vec
   {
+    using iter = T*;
+    using const_iter = const T*;
+
     ~vec();
     vec();
-    vec(const vec< T >&);
-    vec(vec< T >&&) noexcept;
+    vec(const vec<T>&);
+    vec(vec<T>&&) noexcept;
     vec(size_t size, const T& init);
-    explicit vec(std::initializer_list< T > il);
+    explicit vec(std::initializer_list<T> il);
 
-    vec< T >& operator=(const vec< T >&);
-    vec< T >& operator=(vec< T >&&) noexcept;
+    vec<T>& operator=(const vec<T>&);
+    vec<T>& operator=(vec<T>&&) noexcept;
 
-    void swap(vec< T >&) noexcept;
+    void swap(vec<T>&) noexcept;
 
     bool isEmpty() const noexcept;
     size_t getSize() const noexcept;
     size_t getCapacity() const noexcept;
 
-    // Методы с классной работы
+    iter begin() noexcept { return data_; }
+    iter end() noexcept { return data_ + size_; }
+    const_iter begin() const noexcept { return data_; }
+    const_iter end() const noexcept { return data_ + size_; }
+
     void reserve(size_t required);
     void shrinkToFit();
-    void pushBackCount(size_t k, const T& v);
+    
+    iter insert(iter pos, const T& v);
+    iter insert(iter pos, size_t c, const T& v);
+    template< class Fwditer >
+    void insert(iter pos, Fwditer b, Fwditer e);
 
-    template< class IT >
-    void pushBackRange(IT b, size_t c);
+    iter erase(iter pos);
+    iter erase(iter first, iter last);
+
+    void pushBack(const T& v);
+    void popBack();
+    void erase(size_t i) { erase(begin() + i); }
 
     T& operator[](size_t id) noexcept;
     const T& operator[](size_t id) const noexcept;
     T& at(size_t id);
     const T& at(size_t id) const;
 
-    void pushBack(const T& v);
-    void popBack();
-
-    void insert(size_t i, const T& v);
-    void erase(size_t i);
-
-    void insert(size_t i, const vec< T >& rhs, size_t start, size_t end);
-    void erase(size_t start, size_t end);
-
-    template< class VectorIterator, class FwdIterator >
-    void insert(VectorIterator pos, FwdIterator begin, FwdIterator end);
-
-   private:
+  private:
     T* data_;
     size_t size_, cap_;
 
+    static T* alloc(size_t n);
+    void destroy() noexcept;
     explicit vec(size_t size);
     void unsafePushBack(const T& v);
   };
 
-  template< class T >
-  bool operator==(const vec< T >& lhs, const vec< T >& rhs);
-}
+  template<class T>
+  T* vec<T>::alloc(size_t n) {
+    return n ? static_cast<T*>(operator new(n * sizeof(T))) : nullptr;
+  }
 
-template< class T >
-topit::vec<T>::vec(size_t size):
-  data_(size ? new T[size] : nullptr),
-  size_(size),
+  template<class T>
+  void vec<T>::destroy() noexcept {
+    if (data_) {
+      for (size_t i = 0; i < size_; ++i) data_[i].~T();
+      operator delete(data_);
+    }
+  }
+
+  template< class T >
+  topit::vec<T>::vec(size_t size):
+  data_(alloc(size)),
+  size_(0),
   cap_(size)
 {}
 
-template< class T >
-topit::vec<T>::vec():
-  data_(nullptr),
-  size_(0),
-  cap_(0)
-{}
+  template<class T>
+  vec<T>::vec() : data_(nullptr), size_(0), cap_(0) {}
 
-template< class T >
-topit::vec<T>::~vec()
-{
-  delete[] data_;
-}
+  template<class T>
+  vec<T>::~vec() { destroy(); }
 
-template< class T >
-topit::vec<T>::vec(const vec<T>& rhs):
-  vec(rhs.getSize()) // Делегирование аллокации
-{
-  for (size_t i = 0; i < rhs.getSize(); ++i) {
-    data_[i] = rhs[i];
+  template<class T>
+  vec<T>::vec(const vec<T>& rhs) : data_(alloc(rhs.size_)), size_(0), cap_(rhs.size_) {
+    try {
+      for (size_t i = 0; i < rhs.size_; ++i) unsafePushBack(rhs.data_[i]);
+    } catch (...) { destroy(); throw; }
   }
-}
 
-template< class T >
-topit::vec<T>::vec(vec<T>&& rhs) noexcept:
-  data_(rhs.data_),
-  size_(rhs.size_),
-  cap_(rhs.cap_)
-{
-  rhs.data_ = nullptr;
-  rhs.size_ = 0;
-  rhs.cap_ = 0;
-}
-
-template< class T >
-topit::vec<T>::vec(size_t size, const T& init):
-  vec(size)
-{
-  for (size_t i = 0; i < size; ++i) {
-    data_[i] = init;
+  template<class T>
+  vec<T>::vec(vec<T>&& rhs) noexcept : data_(rhs.data_), size_(rhs.size_), cap_(rhs.cap_) {
+    rhs.data_ = nullptr; rhs.size_ = 0; rhs.cap_ = 0;
   }
-}
 
-template< class T >
-topit::vec<T>::vec(std::initializer_list<T> il):
-  vec(il.size())
-{
-  size_t i = 0;
-  for (auto it = il.begin(); it != il.end(); ++it) {
-    data_[i++] = *it;
+  template<class T>
+  vec<T>::vec(size_t size, const T& init) : data_(alloc(size)), size_(0), cap_(size) {
+    try {
+      for (size_t i = 0; i < size; ++i) unsafePushBack(init);
+    } catch (...) { destroy(); throw; }
   }
-}
 
-template< class T >
-void topit::vec<T>::swap(vec<T>& rhs) noexcept
-{
-  std::swap(data_, rhs.data_);
-  std::swap(size_, rhs.size_);
-  std::swap(cap_, rhs.cap_);
-}
-
-template< class T >
-topit::vec<T>& topit::vec<T>::operator=(const vec<T>& rhs)
-{
-  if (this == std::addressof(rhs)) {
-    return *this;
+  template<class T>
+  vec<T>::vec(std::initializer_list<T> il) : data_(alloc(il.size())), size_(0), cap_(il.size()) {
+    try {
+      for (const auto& x : il) unsafePushBack(x);
+    } catch (...) { destroy(); throw; }
   }
-  vec<T> cpy = rhs;
-  swap(cpy);
-  return *this;
-}
 
-template< class T >
-topit::vec<T>& topit::vec<T>::operator=(vec<T>&& rhs) noexcept
-{
-  if (this == std::addressof(rhs)) {
-    return *this;
-  }
-  vec<T> cpy(std::move(rhs));
-  swap(cpy);
-  return *this;
-}
-
-template< class T >
-T& topit::vec<T>::operator[](size_t id) noexcept
-{
-  return data_[id];
-}
-
-template< class T >
-const T& topit::vec<T>::operator[](size_t id) const noexcept
-{
-  return data_[id];
-}
-
-template< class T >
-const T& topit::vec<T>::at(size_t id) const
-{
-  if (id < getSize()) {
-    return (*this)[id];
-  }
-  throw std::out_of_range("bad id");
-}
-
-template< class T >
-T& topit::vec<T>::at(size_t id)
-{
-  const vec<T>* cthis = this;
-  return const_cast<T&>(cthis->at(id));
-}
-
-template< class T >
-size_t topit::vec<T>::getSize() const noexcept { return size_; }
-
-template< class T >
-size_t topit::vec<T>::getCapacity() const noexcept { return cap_; }
-
-template< class T >
-bool topit::vec<T>::isEmpty() const noexcept { return !size_; }
-
-template< class T >
-void topit::vec<T>::pushBack(const T& v)
-{
-  if (size_ == cap_) {
-    reserve(cap_ == 0 ? 1 : cap_ * 2);
-  }
-  unsafePushBack(v);
-}
-
-template< class T >
-void topit::vec<T>::unsafePushBack(const T& v)
-{
-  assert(size_ < cap_);
-  data_[size_++] = v;
-}
-
-template< class T >
-void topit::vec<T>::reserve(size_t required)
-{
-  if (required > cap_) {
-    T* new_data = new T[required];
-    for (size_t i = 0; i < size_; ++i) {
-      new_data[i] = std::move(data_[i]);
+  template<class T>
+  void vec<T>::reserve(size_t required) {
+    if (required <= cap_) return;
+    T* new_ptr = alloc(required);
+    size_t i = 0;
+    try {
+      for (; i < size_; ++i) new (new_ptr + i) T(std::move(data_[i]));
+    } catch (...) {
+      for (size_t j = 0; j < i; ++j) new_ptr[j].~T();
+      operator delete(new_ptr);
+      throw;
     }
-    delete[] data_;
-    data_ = new_data;
+    size_t old_sz = size_;
+    destroy();
+    data_ = new_ptr;
+    size_ = old_sz;
     cap_ = required;
   }
-}
 
-template< class T >
-void topit::vec<T>::popBack()
-{
-  if (size_ > 0) {
-    --size_;
+  template<class T>
+  typename vec<T>::iter vec<T>::insert(iter pos, const T& v) {
+    size_t offset = pos - begin();
+    if (size_ == cap_) reserve(cap_ == 0 ? 1 : cap_ * 2);
+    
+    iter target = begin() + offset;
+    if (target != end()) {
+      new (data_ + size_) T(std::move(*(end() - 1)));
+      for (iter it = end() - 1; it > target; --it) *it = std::move(*(it - 1));
+      *target = v;
+    } else {
+      new (target) T(v);
+    }
+    size_++;
+    return begin() + offset;
   }
-}
 
-template< class T >
-bool topit::operator==(const vec<T>& lhs, const vec<T>& rhs)
-{
-  if (lhs.getSize() != rhs.getSize()) return false;
-  for (size_t i = 0; i < lhs.getSize(); ++i) {
-    if (!(lhs[i] == rhs[i])) return 0;
+  template<class T>
+  typename vec<T>::iter vec<T>::erase(iter pos) {
+    if (pos == end()) return pos;
+    size_t offset = pos - begin();
+    for (iter it = pos; it < end() - 1; ++it) *it = std::move(*(it + 1));
+    (end() - 1)->~T();
+    size_--;
+    return begin() + offset;
   }
-  return 1;
+
+  template<class T>
+  void vec<T>::shrinkToFit() {
+    if (size_ < cap_) {
+      vec<T> temp(*this);
+      swap(temp);
+    }
+  }
+
+  template<class T>
+  void vec<T>::unsafePushBack(const T& v) {
+    new (data_ + size_) T(v);
+    size_++;
+  }
+
+  template<class T>
+  void vec<T>::swap(vec<T>& rhs) noexcept {
+    std::swap(data_, rhs.data_);
+    std::swap(size_, rhs.size_);
+    std::swap(cap_, rhs.cap_);
+  }
+
+  template<class T>
+  vec<T>& vec<T>::operator=(const vec<T>& rhs) {
+    if (this != std::addressof(rhs)) { vec<T> c(rhs); swap(c); }
+    return *this;
+  }
+
+  template<class T>
+ vec<T>& vec<T>::operator=(vec<T>&& rhs) noexcept {
+    if (this != std::addressof(rhs)) {
+      swap(rhs);
+    }
+    return *this;
+  }
+
+  template<class T>
+  T& vec<T>::at(size_t id) {
+    if (id >= size_) throw std::out_of_range("vec::at");
+    return data_[id];
+  }
+
+  template<class T>
+  const T& vec<T>::at(size_t id) const {
+    if (id >= size_) throw std::out_of_range("vec::at");
+    return data_[id];
+  }
+
+  template<class T>
+  T& vec<T>::operator[](size_t id) noexcept { return data_[id]; }
+
+  template<class T>
+  const T& vec<T>::operator[](size_t id) const noexcept { return data_[id]; }
+
+  template<class T>
+  size_t vec<T>::getSize() const noexcept { return size_; }
+
+  template<class T>
+  size_t vec<T>::getCapacity() const noexcept { return cap_; }
+
+  template<class T>
+  bool vec<T>::isEmpty() const noexcept { return !size_; }
+
+  template<class T>
+  void vec<T>::pushBack(const T& v) {
+    if (size_ == cap_) reserve(cap_ == 0 ? 1 : cap_ * 2);
+    unsafePushBack(v);
+  }
+
+  template<class T>
+  void vec<T>::popBack() { if (size_) { (data_ + size_ - 1)->~T(); size_--; } }
+
+  template<class T>
+  bool operator==(const vec<T>& lhs, const vec<T>& rhs) {
+    if (lhs.getSize() != rhs.getSize()) return false;
+    for (size_t i = 0; i < lhs.getSize(); ++i) if (!(lhs[i] == rhs[i])) return false;
+    return true;
+  }
 }
 
 #endif
