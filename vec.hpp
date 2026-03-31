@@ -7,11 +7,9 @@
 #include <utility>
 #include <new>
 
-namespace topit
-{
+namespace topit {
   template<class T>
-  struct vec
-  {
+  struct vec {
     using iter = T*;
     using const_iter = const T*;
 
@@ -55,7 +53,6 @@ namespace topit
     const T& operator[](size_t id) const noexcept;
     T& at(size_t id);
     const T& at(size_t id) const;
-
   private:
     T* data_;
     size_t size_, cap_;
@@ -64,8 +61,7 @@ namespace topit
     void destroy() noexcept;
     explicit vec(size_t size);
     void unsafePushBack(const T& v);
-  };
-
+  };;
   template<class T>
   T* vec<T>::alloc(size_t n) {
     return n ? static_cast<T*>(operator new(n * sizeof(T))) : nullptr;

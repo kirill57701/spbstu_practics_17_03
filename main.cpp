@@ -51,7 +51,7 @@ bool testElementOutOfBoundConstAccess() {
     return false;
   } catch (const std::out_of_range &) {
     return true;
-  } catch (...)
+  } catch (...) {
     return false;
   }
 }
